@@ -7,6 +7,7 @@ from .iter import (
 )
 from .text import (
     clean_extra_whitespaces,
+    clean_broken_unicode,
     get_checksum,
 )
 from .territories import (

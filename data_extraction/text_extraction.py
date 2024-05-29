@@ -6,7 +6,7 @@ import subprocess
 import requests
 
 from tasks import TextExtractorInterface
-
+from tasks.ultils  clean_broken_unicode
 
 class ApacheTikaTextExtractor(TextExtractorInterface):
     def __init__(self, url: str):
@@ -19,14 +19,19 @@ class ApacheTikaTextExtractor(TextExtractorInterface):
         return magic.from_file(filepath, mime=True)
 
     def _return_file_content(self, filepath: str) -> str:
-        with open(filepath, "r") as file:
+        with open(filepath, "r", encoding='utf-8') as file:
             return file.read()
 
     def _try_extract_text(self, filepath: str) -> str:
         if self.is_txt(filepath):
             return self._return_file_content(filepath)
-        with open(filepath, "rb") as file:
-            headers = {"Content-Type": self._get_file_type(filepath)}
+        with open(filepath, "rb", encoding='utf-8') as file:
+            
+            headers = {
+                "Content-Type": self._get_file_type(filepath),
+                "Accept": "text/plain",
+            }
+
             response = requests.put(f"{self._url}/tika", data=file, headers=headers)
             response.encoding = "UTF-8"
             return response.text
@@ -36,7 +41,10 @@ class ApacheTikaTextExtractor(TextExtractorInterface):
         self.check_file_exists(filepath)
         self.check_file_type_supported(filepath)
         try:
-            return self._try_extract_text(filepath)
+            return clean_broken_unicode(
+                self._try_extract_text(filepath)
+            )
+            
         except Exception as e:
             raise Exception("Could not extract file content") from e
 

@@ -1,11 +1,31 @@
 import re
 import hashlib
 from io import BytesIO
-
+import ftfy
 
 def clean_extra_whitespaces(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
+def clean_broken_unicode(text: str) -> str:
+    """
+    Corrige problemas de codificação Unicode em uma string.
+
+    Esta função utiliza a biblioteca ftfy (Fixes Text For You) para detectar e corrigir
+    texto corrompido por erros de codificação, como 'mojibake'. O resultado é uma string
+    onde os caracteres foram restaurados para sua forma correta.
+
+    Parâmetros:
+    text (str): A string de entrada que pode conter caracteres Unicode corrompidos.
+
+    Retorna:
+    str: A string com os caracteres Unicode corrigidos.
+
+    Exemplo:
+    >>> clean_broken_unicode('Ã©')
+    'é'
+    
+    """
+   return ftfy.fix_text(text)
 
 def get_checksum(source_text: str) -> str:
     """Calculate the md5 checksum of text
