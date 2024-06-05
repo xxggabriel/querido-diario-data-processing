@@ -2,3 +2,10 @@ __pycache__
 .coverage
 envvars
 contrib/data
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
