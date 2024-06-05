@@ -2,6 +2,7 @@ import re
 import hashlib
 from io import BytesIO
 import ftfy
+from cleantext import clean
 
 def clean_extra_whitespaces(text: str) -> str:
     return re.sub(r"\s+", " ", text)
@@ -25,7 +26,16 @@ def clean_broken_unicode(text: str) -> str:
     'é'
     
     """
-   return ftfy.fix_text(text)
+    return ftfy.fix_text(text)
+def clean_extracted_text(text: str) -> str:
+    cleaned_text = clean(
+        text, 
+        fix_unicode=True, 
+        to_ascii=True, 
+        lang="pt"
+    )
+
+    return cleaned_text
 
 def get_checksum(source_text: str) -> str:
     """Calculate the md5 checksum of text
