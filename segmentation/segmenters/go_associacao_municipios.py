@@ -5,6 +5,9 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 import spacy
 import re
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, Any, List
+
 
 class GOAssociacaoMunicipiosSegmenter:
     nlp = spacy.load('pt_core_news_sm')
@@ -19,19 +22,31 @@ class GOAssociacaoMunicipiosSegmenter:
             separators=["Código Identificador:"]
         )
 
-
-
     def get_gazette_segments(self, gazette: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Returns a list of dicts with the gazettes metadata
         """
         territory_to_text_map = self.split_text_by_territory(gazette["source_text"])
-        gazette_segments = [
-            self.build_segment(territory_slug, segment_text, gazette).__dict__
-            for territory_slug, segment_text in territory_to_text_map.items()
-        ]
+        
+        def build_segment_parallel(territory_slug, segment_text):
+            logging.debug(f"Building segment for territory \"{territory_slug}\".")
+            return self.build_segment(territory_slug, segment_text, gazette).__dict__
+
+        gazette_segments = []
+
+        with ThreadPoolExecutor() as executor:
+            futures = [
+                executor.submit(build_segment_parallel, territory_slug, segment_text)
+                for territory_slug, segments_text in territory_to_text_map.items()
+                for segment_text in segments_text
+            ]
+            
+            for future in futures:
+                gazette_segments.append(future.result())
+        
         return gazette_segments
 
+    
     def split_text_by_territory(self, text: str) -> Dict[str, str]:
         """
         Segment a association text by territory
@@ -42,23 +57,30 @@ class GOAssociacaoMunicipiosSegmenter:
         clean_text = "\n".join(re.split(re.escape(ama_header), text))
 
         raw_segments = self.text_splitter.split_text(text)
-
         territory_to_text_map = {}
-        for pattern_batch in raw_segments:
+
+        def process_segment(segment_text: str):
             uf = "GO"
-            municipios = self.find_municipios(pattern_batch, uf)
+            municipios = self.find_municipios(segment_text, uf)
             territory_name = "Associação dos Municípios de Goiás"
-            if len(municipios) != 0:
+            if len(municipios) > 0:
                 territory_name = municipios[-1].get('territory_name')
                 uf = municipios[-1].get('state_code')
             
             territory_slug = get_territory_slug(territory_name, uf)
             previous_text_or_header = territory_to_text_map.setdefault(
-                territory_slug, f"{ama_header}\n "
+                territory_slug, []
             )
-            raw_batch_text = "".join(pattern_batch)
-            new_territory_text = f"{previous_text_or_header}\n=+=+=+=+=+=||=+=+=+=+=+=\n{raw_batch_text}"
-            territory_to_text_map[territory_slug] = new_territory_text
+
+            new_territory_text = f"{ama_header}\n{segment_text}"
+
+            return territory_slug, new_territory_text
+
+        with ThreadPoolExecutor() as executor:
+            results = executor.map(process_segment, raw_segments)
+
+        for territory_slug, new_segment_territory_text in results:
+            territory_to_text_map[territory_slug].append(new_segment_territory_text)
 
         return territory_to_text_map
 
@@ -73,6 +95,7 @@ class GOAssociacaoMunicipiosSegmenter:
         return GazetteSegment(**{
             **gazette,
             # segment specific values
+            "is_fragmented": True,
             "processed": True,
             "file_checksum": get_checksum(segment_text),
             "source_text": segment_text.strip(),
@@ -96,7 +119,3 @@ class GOAssociacaoMunicipiosSegmenter:
         
         return found_municipios
 
-
-# !pip install -qU transformers langchain_experimental  langchain_community langchain
-# !pip install spacy
-# !python -m spacy download pt_core_news_sm

@@ -1,6 +1,7 @@
 import re
 from typing import Dict, List
-
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import logging
 from .interfaces import IndexInterface
 from .utils import (
     get_documents_from_query_with_highlights,
@@ -18,20 +19,15 @@ def tag_entities_in_excerpts(
 def tag_theme_cases(theme: Dict, excerpt_ids: List[str], index: IndexInterface) -> None:
     cases = theme["entities"]["cases"]
     es_queries = [get_es_query_from_entity_case(case, excerpt_ids) for case in cases]
-    for case, es_query in zip(cases, es_queries):
-        documents = get_documents_from_query_with_highlights(
-            es_query, index, theme["index"]
-        )
+
+    def process_case(case, es_query):
+        documents = get_documents_from_query_with_highlights(es_query, index, theme["index"])
         for document in documents:
             excerpt = document["_source"]
-            highlight = document["highlight"][
-                "excerpt.with_stopwords"
-            ][0]
+            highlight = document["highlight"]["excerpt.with_stopwords"][0]
             excerpt.update(
                 {
-                    "excerpt_entities": list(
-                        set(excerpt.get("excerpt_entities", [])) | {case["title"]}
-                    ),
+                    "excerpt_entities": list(set(excerpt.get("excerpt_entities", [])) | {case["title"]}),
                     "excerpt": highlight,
                 }
             )
@@ -41,6 +37,16 @@ def tag_theme_cases(theme: Dict, excerpt_ids: List[str], index: IndexInterface) 
                 index=theme["index"],
                 refresh=True,
             )
+    
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_case, case, es_query) for case, es_query in zip(cases, es_queries)]
+        
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                logging.warning(f"Error processing case: {e}")
+                logging.exception(e)
 
 
 def get_es_query_from_entity_case(

@@ -42,7 +42,8 @@ def get_gazettes_extracted_since_yesterday(
         gazettes.territory_id,
         gazettes.processed,
         territories.name as territory_name,
-        territories.state_code
+        territories.state_code,
+        gazettes.is_fragmented
     FROM
         gazettes
     INNER JOIN territories ON territories.id = gazettes.territory_id
@@ -78,7 +79,8 @@ def get_all_gazettes_extracted(
         gazettes.territory_id,
         gazettes.processed,
         territories.name as territory_name,
-        territories.state_code
+        territories.state_code,
+        gazettes.is_fragmented
     FROM
         gazettes
     INNER JOIN territories ON territories.id = gazettes.territory_id
@@ -112,7 +114,8 @@ def get_unprocessed_gazettes(
         gazettes.territory_id,
         gazettes.processed,
         territories.name as territory_name,
-        territories.state_code
+        territories.state_code,
+        gazettes.is_fragmented
     FROM
         gazettes
     INNER JOIN territories ON territories.id = gazettes.territory_id
@@ -141,4 +144,5 @@ def format_gazette_data(data):
         "processed": data[12],
         "territory_name": data[13],
         "state_code": data[14],
+        "is_fragmented": data[15],
     }

@@ -19,6 +19,7 @@ def create_gazettes_index(index: IndexInterface) -> None:
                 "id": {"type": "keyword"},
                 "is_extra_edition": {"type": "boolean"},
                 "power": {"type": "keyword"},
+                "is_fragmented": {"type": "boolean"},
                 "processed": {"type": "boolean"},
                 "scraped_at": {"type": "date"},
                 "source_text": {

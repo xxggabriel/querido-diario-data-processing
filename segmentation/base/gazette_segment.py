@@ -14,6 +14,7 @@ class GazetteSegment:
     date: date
     edition_number: str
     is_extra_edition: bool
+    is_fragmented: bool
     power: str
     file_checksum: str
     scraped_at: datetime

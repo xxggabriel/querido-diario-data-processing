@@ -4,6 +4,8 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Union
 from segmentation import get_segmenter
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 
 from .interfaces import (
     DatabaseInterface,
@@ -26,10 +28,9 @@ def extract_text_from_gazettes(
     """
     logging.info("Starting text extraction from gazettes")
 
-    ids = []
-    for gazette in gazettes:
+    def process_gazette(gazette: Dict[str, Any]) -> List[str]:
         try:
-            document_ids = try_process_gazette_file(
+            return try_process_gazette_file(
                 gazette, territories, database, storage, index, text_extractor
             )
         except Exception as e:
@@ -37,8 +38,22 @@ def extract_text_from_gazettes(
                 f"Could not process gazette: {gazette['file_path']}. Cause: {e}"
             )
             logging.exception(e)
-        else:
-            ids.extend(document_ids)
+            return []
+
+    ids = []
+    with ThreadPoolExecutor() as executor:
+        futures = {executor.submit(process_gazette, gazette): gazette for gazette in gazettes}
+
+        for future in as_completed(futures):
+            try:
+                result = future.result()
+                ids.extend(result)
+            except Exception as e:
+                gazette = futures[future]
+                logging.warning(
+                    f"Could not process gazette: {gazette['file_path']}. Cause: {e}"
+                )
+                logging.exception(e)
 
     return ids
 
@@ -68,17 +83,29 @@ def try_process_gazette_file(
         segmenter = get_segmenter(gazette["territory_id"], territories)
         territory_segments = segmenter.get_gazette_segments(gazette)
 
-        for segment in territory_segments:
+        def process_segment(segment: Dict[str, Any]) -> str:
             segment_txt_path = define_segment_txt_path(segment)
             segment["file_raw_txt"] = define_file_url(segment_txt_path)
             upload_raw_text(segment_txt_path, segment["source_text"], storage)
             index.index_document(segment, document_id=segment["file_checksum"])
-            document_ids.append(segment["file_checksum"])
+            return segment["file_checksum"]
+
+        with ThreadPoolExecutor() as executor:
+            future_to_segment = {executor.submit(process_segment, segment): segment for segment in territory_segments}
+            for future in future_to_segment:
+                try:
+                    document_id = future.result()
+                    document_ids.append(document_id)
+                except Exception as e:
+                    segment = future_to_segment[future]
+                    logging.warning(f"Could not process segment: {segment['file_raw_txt']}. Cause: {e}")
+                    logging.exception(e)
     else:
         index.index_document(gazette, document_id=gazette["file_checksum"])
         document_ids.append(gazette["file_checksum"])
 
     set_gazette_as_processed(gazette, database)
+    logging.info(f"Finished processing gazette {gazette['file_path']}")
     return document_ids
 
 

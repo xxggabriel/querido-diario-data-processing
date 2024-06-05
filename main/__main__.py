@@ -17,6 +17,9 @@ from tasks import (
     tag_entities_in_excerpts,
 )
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
 
 def is_debug_enabled():
     return environ.get("DEBUG", "0") == "1"
@@ -51,14 +54,28 @@ def execute_pipeline():
     indexed_gazette_ids = extract_text_from_gazettes(
         gazettes_to_be_processed, territories, database, storage, index, text_extractor
     )
-   
-    for theme in themes:
-        create_themed_excerpts_index(theme, index)
-        themed_excerpt_ids = extract_themed_excerpts_from_gazettes(
-            theme, indexed_gazette_ids, index
-        )
-        embedding_rerank_excerpts(theme, themed_excerpt_ids, index)
-        tag_entities_in_excerpts(theme, themed_excerpt_ids, index)
+
+    def process_theme(theme):
+        try:
+            create_themed_excerpts_index(theme, index)
+            themed_excerpt_ids = extract_themed_excerpts_from_gazettes(
+                theme, indexed_gazette_ids, index
+            )
+            embedding_rerank_excerpts(theme, themed_excerpt_ids, index)
+            tag_entities_in_excerpts(theme, themed_excerpt_ids, index)
+        except Exception as e:
+            logging.warning(f"Could not process theme: {theme}. Cause: {e}")
+            logging.exception(e)
+
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(process_theme, theme) for theme in themes]
+
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                logging.warning(f"Exception occurred: {e}")
+                logging.exception(e)
 
 
 if __name__ == "__main__":
