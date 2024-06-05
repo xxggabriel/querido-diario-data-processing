@@ -206,7 +206,7 @@ class PostgreSQLTests(TestCase):
                     source_text,
                     date ,
                     edition_number,
-                    is_extra_edition,
+                    is_extra_edition,                    
                     power,
                     file_checksum ,
                     file_path ,
@@ -214,7 +214,9 @@ class PostgreSQLTests(TestCase):
                     scraped_at,
                     created_at,
                     territory_id,
-                    processed)
+                    processed,
+                    is_fragmented
+                )
                 VALUES ( %(id)s,
                     %(source_text)s,
                     %(date)s ,
@@ -227,7 +229,9 @@ class PostgreSQLTests(TestCase):
                     %(scraped_at)s,
                     %(created_at)s,
                     %(territory_id)s,
-                    %(processed)s);""",
+                    %(processed)s,
+                    %(is_fragmented)s
+                );""",
                 data,
             )
 
@@ -258,6 +262,7 @@ class PostgreSQLTests(TestCase):
                     "processed": False,
                     "state_code": "SC",
                     "territory_name": "Gaspar",
+                    "is_fragmented": False,
                 }
             )
         self.set_some_fake_data_as_ingested_by_the_system_and_no_need_to_be_processed()
