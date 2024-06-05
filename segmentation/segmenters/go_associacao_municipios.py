@@ -7,7 +7,7 @@ import re
 import logging
 
 class GOAssociacaoMunicipiosSegmenter:
-    nlp = None
+    nlp = spacy.load('pt_core_news_sm')
     def __init__(self, territories: Iterable[Dict[str, Any]]):
         self.territories = territories
 
@@ -19,9 +19,6 @@ class GOAssociacaoMunicipiosSegmenter:
             separators=["Código Identificador:"]
         )
 
-        # Carregar o modelo de português do spaCy
-        if self.nlp is None:
-            self.nlp = spacy.load('pt_core_news_sm')
 
 
     def get_gazette_segments(self, gazette: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -48,9 +45,9 @@ class GOAssociacaoMunicipiosSegmenter:
 
         territory_to_text_map = {}
         for pattern_batch in raw_segments:
-            municipios = self.find_municipios(pattern_batch)
-            territory_name = "Associação dos Municípios de Goiás"
             uf = "GO"
+            municipios = self.find_municipios(pattern_batch, uf)
+            territory_name = "Associação dos Municípios de Goiás"
             if len(municipios) != 0:
                 territory_name = municipios[-1].get('territory_name')
                 uf = municipios[-1].get('state_code')
@@ -84,18 +81,17 @@ class GOAssociacaoMunicipiosSegmenter:
         })
 
     # Função para encontrar municípios no texto
-    def find_municipios(self, text):
+    def find_municipios(self, text, state_code: str):
         doc = self.nlp(text)
         found_municipios = []
         
         
         # print(self.territories)
-        for ent in doc.ents:
+        for ent in reversed(doc.ents):
             if ent.label_ == 'LOC':
                 for territorie in self.territories:
-                    if territorie.get('territory_name') in ent.text:
+                    if territorie.get('state_code') == state_code and territorie.get('territory_name') in ent.text:
                         found_municipios.append(territorie)
-                        
                         break
         
         return found_municipios
