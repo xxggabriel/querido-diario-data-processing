@@ -4,8 +4,10 @@ from tasks.utils import batched, get_checksum, get_territory_data, get_territory
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import spacy
 import re
+import logging
 
 class GOAssociacaoMunicipiosSegmenter:
+    nlp = None
     def __init__(self, territories: Iterable[Dict[str, Any]]):
         self.territories = territories
 
@@ -18,7 +20,8 @@ class GOAssociacaoMunicipiosSegmenter:
         )
 
         # Carregar o modelo de português do spaCy
-        self.nlp = spacy.load('pt_core_news_sm')
+        if self.nlp is None:
+            self.nlp = spacy.load('pt_core_news_sm')
 
 
     def get_gazette_segments(self, gazette: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -41,18 +44,23 @@ class GOAssociacaoMunicipiosSegmenter:
         # clean headers
         clean_text = "\n".join(re.split(re.escape(ama_header), text))
 
-        raw_segments = self.text_splitter.text_splitter.split_text(text)
+        raw_segments = self.text_splitter.split_text(text)
 
         territory_to_text_map = {}
         for pattern_batch in raw_segments:
-            territory_name = self.find_municipios(pattern_batch)[-1]
+            municipios = self.find_municipios(pattern_batch)
+            territory_name = "Associação dos Municípios de Goiás"
+            uf = "GO"
+            if len(municipios) != 0:
+                territory_name = municipios[-1].get('territory_name')
+                uf = municipios[-1].get('state_code')
             
-            territory_slug = get_territory_slug(clean_territory_name, "GO")
+            territory_slug = get_territory_slug(territory_name, uf)
             previous_text_or_header = territory_to_text_map.setdefault(
-                territory_slug, f"{ama_header}\n"
+                territory_slug, f"{ama_header}\n "
             )
             raw_batch_text = "".join(pattern_batch)
-            new_territory_text = f"{previous_text_or_header}\n{raw_batch_text}"
+            new_territory_text = f"{previous_text_or_header}\n=+=+=+=+=+=||=+=+=+=+=+=\n{raw_batch_text}"
             territory_to_text_map[territory_slug] = new_territory_text
 
         return territory_to_text_map
@@ -63,8 +71,8 @@ class GOAssociacaoMunicipiosSegmenter:
         logging.debug(
             f"Creating segment for territory \"{territory_slug}\" from {gazette['file_path']} file."
         )
-        territory_data = get_territory_data(territory_slug, self.territories)
 
+        territory_data = get_territory_data(territory_slug, self.territories)
         return GazetteSegment(**{
             **gazette,
             # segment specific values
@@ -77,12 +85,18 @@ class GOAssociacaoMunicipiosSegmenter:
 
     # Função para encontrar municípios no texto
     def find_municipios(self, text):
-        doc = nlp(text)
+        doc = self.nlp(text)
         found_municipios = []
-
+        
+        
+        # print(self.territories)
         for ent in doc.ents:
-            if ent.label_ == 'LOC' and ent.text in municipios_brasileiros:
-                found_municipios.append(ent.text)
+            if ent.label_ == 'LOC':
+                for territorie in self.territories:
+                    if territorie.get('territory_name') in ent.text:
+                        found_municipios.append(territorie)
+                        
+                        break
         
         return found_municipios
 

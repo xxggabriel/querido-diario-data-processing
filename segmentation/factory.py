@@ -39,6 +39,7 @@ def get_segmenter(territory_id: str, territories: Iterable[Dict[str, Any]]) -> A
 
     territory_to_segmenter_class = {
         "2700000": "ALAssociacaoMunicipiosSegmenter",
+        "5200000": "GOAssociacaoMunicipiosSegmenter",
     }
 
     if territory_id not in _segmenter_instances:
